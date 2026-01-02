@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HzPharmacy | Frequency Generator</title>
+    <style>
+        :root {
+            --bg-color: #0f111a;
+            --panel-color: #1a1d2d;
+            --text-color: #e0e6ed;
+            --accent-color: #00d4ff; /* Tesla Blue */
+            --secondary-color: #7d8597;
+            --danger-color: #ff4757;
+            --success-color: #2ed573;
+            /* Brand Colors */
+            --paypal-gold: #ffc439;
+            --paypal-blue: #003087;
+            --mpesa-green: #39B54A;
+            --twitter-blue: #1DA1F2;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 { margin-bottom: 5px; letter-spacing: 2px; text-transform: uppercase; text-align: center; }
+        p.subtitle { color: var(--secondary-color); font-size: 0.9em; margin-bottom: 30px; text-align: center; }
+
+        /* --- VISUALIZER --- */
+        canvas {
+            width: 100%;
+            max-width: 600px;
+            height: 150px;
+            background: #000;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.1);
+            margin-bottom: 20px;
+        }
+
+        /* --- CONTROLS --- */
+        .control-panel {
+            background: var(--panel-color);
+            padding: 25px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 550px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .category-label {
+            display: block;
+            color: var(--accent-color);
+            font-size: 0.75em;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            margin-top: 15px;
+        }
+
+        select, button, input[type="range"] {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border: none;
+            background: #252a40;
+            color: white;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        select { appearance: none; cursor: pointer; border: 1px solid #363c52; }
+        select:focus { outline: none; border-color: var(--accent-color); }
+
+        button {
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            filter: brightness(1.1);
+        }
+
+        #playBtn {
+            background: var(--success-color);
+            color: #000;
+            margin-top: 20px;
+        }
+        #playBtn.playing {
+            background: var(--danger-color);
+            color: #fff;
+        }
+
+        /* --- INFO BOX --- */
+        .info-box {
+            background: rgba(0, 212, 255, 0.05);
+            border-left: 4px solid var(--accent-color);
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+        }
+        .info-title { font-weight: bold; color: var(--accent-color); display: block; margin-bottom: 5px; }
+        .info-desc { font-size: 0.9em; line-height: 1.5; color: #cbd5e1; }
+
+        /* --- SLIDERS --- */
+        .slider-container { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+        label { font-size: 0.85em; color: var(--secondary-color); width: 60px; }
+        input[type=range] { flex-grow: 1; cursor: pointer; height: 6px; }
+        
+        /* BINAURAL TOGGLE */
+        .binaural-controls {
+            display: none; /* Hidden by default */
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .binaural-active { display: block; animation: fadeIn 0.5s; }
+
+        /* --- DONATE & SOCIAL SECTION --- */
+        .donate-section {
+            margin-top: 30px;
+            text-align: center;
+            opacity: 0.9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px; /* Spacing between buttons */
+        }
+        
+        .donate-text {
+            color: var(--secondary-color);
+            font-size: 0.8rem;
+            margin-bottom: 5px;
+        }
+
+        .donate-btn {
+            background-color: var(--paypal-gold);
+            color: var(--paypal-blue);
+            padding: 10px 24px;
+            border-radius: 20px;
+            text-decoration: none;
+            font-weight: bold;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: transform 0.2s, filter 0.2s;
+            border: none;
+            font-size: 0.95rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            width: 250px; /* Fixed width for uniform look */
+        }
+
+        .donate-btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.05);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+
+        .donate-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor; /* Uses text color */
+        }
+
+        /* M-Pesa Specific Styles */
+        .mpesa-btn {
+            background-color: var(--mpesa-green);
+            color: white;
+        }
+
+        /* Twitter Specific Styles */
+        .twitter-btn {
+            background-color: var(--twitter-blue);
+            color: white;
+        }
+
+        /* --- COMMENTS SECTION --- */
+        .comments-section {
+            width: 100%;
+            max-width: 600px;
+            margin-top: 40px;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <h1>Hz Pharmacy</h1>
+    <p class="subtitle">powered by darkwaterlabs</p>
+
+    <!-- FREQUENCY VISUALIZER -->
+    <canvas id="visualizer"></canvas>
+
+    <div class="control-panel">
+        
+        <!-- PRESET SELECTOR -->
+        <div class="category-label">Select Treatment / Frequency</div>
+        <select id="freqSelect">
+            <option value="" disabled selected>-- Choose a Frequency --</option>
+            
+            <optgroup label="1. Solfeggio (Spiritual & Emotional)">
+                <option value="174" data-desc="Relieves pain and stress. Foundation of the scale.">174 Hz - Pain Relief</option>
+                <option value="285" data-desc="Heals tissues and organs. Rejuvenates the body.">285 Hz - Tissue Repair</option>
+                <option value="396" data-desc="Liberates guilt and fear. Root Chakra.">396 Hz - Remove Fear</option>
+                <option value="417" data-desc="Facilitates change and undoes situations. Sacral Chakra.">417 Hz - Wipe out Negativity</option>
+                <option value="528" data-desc="The 'Miracle' tone. DNA repair and transformation.">528 Hz - DNA Repair (Miracle)</option>
+                <option value="639" data-desc="Enhances communication and relationships. Heart Chakra.">639 Hz - Relationships</option>
+                <option value="741" data-desc="Awakens intuition and solves problems. Throat Chakra.">741 Hz - Intuition</option>
+                <option value="852" data-desc="Returns to spiritual order. Third Eye.">852 Hz - Spiritual Order</option>
+                <option value="963" data-desc="Connects to light and spirit. Pineal gland.">963 Hz - Divine Consciousness</option>
+            </optgroup>
+
+            <optgroup label="2. Nogier (Physical Body Resonance)">
+                <option value="73" data-desc="Emotional balance and hormonal regulation.">73 Hz - Hormones & Emotions</option>
+                <option value="146" data-desc="Intellectual organization, memory, and cortex.">146 Hz - Memory & Cortex</option>
+                <option value="292" data-desc="Ectoderm: Skin, nerves, and eyes. Wound healing.">292 Hz - Skin & Nerves</option>
+                <option value="584" data-desc="Endoderm: Liver, lungs, and digestive tract.">584 Hz - Digestion & Organs</option>
+                <option value="1168" data-desc="Mesoderm: Bones, muscles, and joints.">1168 Hz - Bones & Joints</option>
+                <option value="2336" data-desc="Coordinates the two sides of the brain.">2336 Hz - Brain Hemispheres</option>
+                <option value="4672" data-desc="Pain control and spinal issues.">4672 Hz - Spinal & Pain</option>
+            </optgroup>
+
+            <optgroup label="3. Rife Frequencies (Pathogen Specific)">
+                <option value="20" data-desc="Low frequency rumble associated with breaking down Tuberculosis.">20 Hz - Rife Tuberculosis</option>
+                <option value="727" data-desc="General Rife frequency for Staph infections.">727 Hz - Rife Staph</option>
+                <option value="802" data-desc="General Rife frequency for E. Coli and bacteria.">802 Hz - Rife E. Coli</option>
+                <option value="880" data-desc="General Rife frequency for Strep.">880 Hz - Rife Strep</option>
+                <option value="2008" data-desc="Associated with Sarcoma.">2008 Hz - Rife Sarcoma</option>
+                <option value="2127" data-desc="The famous Rife Cancer/Carcinoma frequency.">2127 Hz - Rife Carcinoma</option>
+                <option value="2400" data-desc="Associated with Parasites and worms.">2400 Hz - Rife Parasites</option>
+            </optgroup>
+
+            <optgroup label="4. Tesla & Nature">
+                <option value="369" data-desc="The 'Key to the Universe' code.">369 Hz - Tesla Code</option>
+                <option value="432" data-desc="Natural Earth tuning. Calming and mathematical.">432 Hz - Earth Tuning</option>
+            </optgroup>
+
+            <optgroup label="5. Brainwave Binaural Beats (Headphones Req.)">
+                <option value="binaural_delta" data-desc="0.5-4Hz. Deep sleep, healing, and growth hormone release.">Delta Waves (Deep Sleep)</option>
+                <option value="binaural_theta" data-desc="4-8Hz. Deep meditation, REM sleep, creativity.">Theta Waves (Meditation)</option>
+                <option value="binaural_alpha" data-desc="8-14Hz. Relaxed focus, stress reduction, learning.">Alpha Waves (Relaxation)</option>
+                <option value="binaural_gamma" data-desc="40Hz. High-level focus, memory binding, Alzheimer's research.">Gamma Waves (Super Focus)</option>
+            </optgroup>
+        </select>
+
+        <!-- INFO DISPLAY -->
+        <div class="info-box" id="infoBox" style="display:none;">
+            <span class="info-title" id="infoTitle">Select a frequency</span>
+            <span class="info-desc" id="infoDesc">...</span>
+        </div>
+
+        <!-- BINAURAL SETTINGS (Hidden unless needed) -->
+        <div id="binauralPanel" class="binaural-controls">
+            <div class="category-label">Binaural Carrier Tone</div>
+            <div class="slider-container">
+                <label>Base Hz</label>
+                <input type="range" id="carrierSlider" min="100" max="400" value="200">
+                <span id="carrierDisplay" style="width: 50px; text-align: right;">200Hz</span>
+            </div>
+            <p style="font-size: 0.8em; color: #888; margin-top:5px;">
+                *You must wear headphones. The "beat" is created by your brain processing the difference between left and right ears.
+            </p>
+        </div>
+
+        <!-- MAIN VOLUME -->
+        <div class="slider-container" style="margin-top: 25px;">
+            <label>Volume</label>
+            <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.3">
+        </div>
+
+        <button id="playBtn">Play Frequency</button>
+    </div>
+
+    <!-- DONATE & SOCIAL BUTTON SECTION -->
+    <div class="donate-section">
+        <p class="donate-text">Support the research & community</p>
+        
+        <!-- 1. PayPal Button -->
+        <a href="https://www.paypal.com/donate/?hosted_button_id=UYVLBEF8G2NZJ" target="_blank" class="donate-btn">
+            <!-- Simple SVG Icon for PayPal "P" -->
+            <svg viewBox="0 0 24 24">
+                <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.946 5.05-3.691 6.67-6.664 6.67H10.3c-.34 0-.623.257-.677.595l-1.397 6.943c-.054.34.208.625.553.625h2.648c.454 0 .845-.333.917-.786l.393-2.486a.82.82 0 0 1 .809-.691h.23c2.973 0 5.718-1.62 6.664-6.67.03-.15.054-.294.077-.437.26-1.666.02-3.115-1.012-4.287-1.112-1.267-3.12-1.81-5.69-1.81H5.998c-.524 0-.972.382-1.054.9L1.837 20.597a.641.641 0 0 0 .633.74h4.606c.345 0 .607-.285.553-.625l-.553-2.75H7.63l.553 2.75c.054.34-.208.625-.553.625z"/>
+            </svg>
+            Donate via PayPal
+        </a>
+
+        <!-- 2. M-Pesa Button -->
+        <!-- Replace 0700000000 with your number. The 'tel' link will open the phone dialer. -->
+        <a href="tel:0715676116" class="donate-btn mpesa-btn">
+            <svg viewBox="0 0 24 24">
+                <path d="M17,19H7V5H17M17,1H7C4.79,1 3,2.79 3,5V19A4,4 0 0,0 7,23H17A4,4 0 0,0 21,19V5C21,2.79 19.21,1 17,1Z"/>
+            </svg>
+            M-Pesa
+        </a>
+
+        <!-- 3. Twitter Button -->
+        <a href="https://x.com/darkwaterlabs" target="_blank" class="donate-btn twitter-btn">
+            <svg viewBox="0 0 24 24">
+                <path d="M22.46 6c-.77.35-1.6.58-2.46.69.88-.53 1.56-1.37 1.88-2.38-.83.5-1.75.85-2.72 1.05C18.37 4.5 17.26 4 16 4c-2.35 0-4.27 1.92-4.27 4.29 0 .34.04.67.11.98C8.28 9.09 5.11 7.38 3 4.79c-.37.63-.58 1.37-.58 2.15 0 1.49.75 2.81 1.91 3.56-.71 0-1.37-.2-1.95-.5v.03c0 2.08 1.48 3.82 3.44 4.21a4.22 4.22 0 0 1-1.93.07 4.28 4.28 0 0 0 4 2.98 8.521 8.521 0 0 1-5.33 1.84c-.34 0-.68-.02-1.02-.06C3.44 20.29 5.7 21 8.12 21 16 21 20.33 14.46 20.33 8.79c0-.19 0-.37-.01-.56.84-.6 1.56-1.36 2.14-2.23z"/>
+            </svg>
+            Follow on Twitter
+        </a>
+    </div>
+
+    <!-- COMMENTS SECTION PLACEHOLDER -->
+    <div class="comments-section">
+        <p style="text-align:center; color: var(--secondary-color); margin-bottom: 20px; font-size: 0.9em;">
+            Community Discussion
+        </p>
+        
+        <!-- 
+             === PASTE YOUR GISCUS SCRIPT HERE === 
+             1. Go to https://giscus.app
+             2. Enter your Repo details
+             3. Copy the <script> tag generated
+             4. Paste it below this line
+        -->
+        <div style="text-align: center; color: #555; font-style: italic; font-size: 0.8em;">
+            (Comment system inactive: waiting for Giscus script)
+        </div>
+
+    </div>
+
+    <script>
+        // --- AUDIO CONTEXT SETUP ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+        let oscillatorL = null;
+        let oscillatorR = null; // Two oscillators for Binaural capability
+        let gainNode, analyser;
+        let isPlaying = false;
+        let isBinaural = false;
+        
+        // --- UI ELEMENTS ---
+        const playBtn = document.getElementById('playBtn');
+        const freqSelect = document.getElementById('freqSelect');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const carrierSlider = document.getElementById('carrierSlider');
+        const carrierDisplay = document.getElementById('carrierDisplay');
+        const infoBox = document.getElementById('infoBox');
+        const infoTitle = document.getElementById('infoTitle');
+        const infoDesc = document.getElementById('infoDesc');
+        const binauralPanel = document.getElementById('binauralPanel');
+
+        // --- CANVAS SETUP ---
+        const canvas = document.getElementById('visualizer');
+        const canvasCtx = canvas.getContext('2d');
+        let dataArray, bufferLength;
+
+        // --- RESIZE CANVAS ---
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- CORE FUNCTIONS ---
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new AudioContext();
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 2048;
+                bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                
+                gainNode = audioCtx.createGain();
+                gainNode.gain.value = volumeSlider.value;
+                gainNode.connect(analyser);
+                analyser.connect(audioCtx.destination);
+                
+                drawVisualizer();
+            }
+        }
+
+        function startSound() {
+            if (!audioCtx) initAudio();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const selection = freqSelect.value;
+            if (!selection) return alert("Please select a frequency first.");
+
+            // Reset Old Oscillators (Safe Cleanup)
+            try {
+                if (oscillatorL) { oscillatorL.stop(); oscillatorL.disconnect(); }
+            } catch(e) { console.warn("Error cleaning up Left Oscillator:", e); }
+            
+            try {
+                if (oscillatorR) { oscillatorR.stop(); oscillatorR.disconnect(); }
+            } catch(e) { console.warn("Error cleaning up Right Oscillator:", e); }
+            
+            oscillatorL = null;
+            oscillatorR = null;
+
+            // Create New Oscillators
+            // NOTE: We only create oscillatorR if we need it (Binaural mode)
+            // This prevents "stop() called on unstarted node" errors.
+            oscillatorL = audioCtx.createOscillator();
+            
+            // Panning Setup (Left/Right)
+            const pannerL = audioCtx.createStereoPanner();
+            const pannerR = audioCtx.createStereoPanner();
+            pannerL.pan.value = -1; // Full Left
+            pannerR.pan.value = 1;  // Full Right
+
+            oscillatorL.type = 'sine';
+
+            if (selection.startsWith('binaural')) {
+                // BINAURAL MODE
+                isBinaural = true;
+                binauralPanel.classList.add('binaural-active');
+                
+                // Create R oscillator ONLY here
+                oscillatorR = audioCtx.createOscillator();
+                oscillatorR.type = 'sine';
+                
+                const carrier = parseInt(carrierSlider.value);
+                let beat = 0;
+
+                // Determine beat frequency
+                if (selection === 'binaural_delta') beat = 2; // Delta 2hz
+                if (selection === 'binaural_theta') beat = 6; // Theta 6hz
+                if (selection === 'binaural_alpha') beat = 10; // Alpha 10hz
+                if (selection === 'binaural_gamma') beat = 40; // Gamma 40hz
+
+                // Set Frequencies (Carrier vs Carrier + Beat)
+                oscillatorL.frequency.value = carrier;
+                oscillatorR.frequency.value = carrier + beat;
+
+                // Connect Left
+                oscillatorL.connect(pannerL);
+                pannerL.connect(gainNode);
+
+                // Connect Right
+                oscillatorR.connect(pannerR);
+                pannerR.connect(gainNode);
+                
+                oscillatorR.start();
+
+            } else {
+                // STANDARD MONO MODE
+                isBinaural = false;
+                binauralPanel.classList.remove('binaural-active');
+                
+                const freq = parseFloat(selection);
+                oscillatorL.frequency.value = freq;
+                
+                // Connect (Center pan by default essentially, but we use pannerL at 0)
+                pannerL.pan.value = 0;
+                oscillatorL.connect(pannerL);
+                pannerL.connect(gainNode);
+            }
+
+            oscillatorL.start();
+            
+            // Fade in to avoid "pop"
+            gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(parseFloat(volumeSlider.value), audioCtx.currentTime + 0.1);
+
+            isPlaying = true;
+            playBtn.textContent = "STOP";
+            playBtn.classList.add('playing');
+        }
+
+        function stopSound() {
+            if (!isPlaying) return;
+
+            if (gainNode) {
+                // Fade out
+                try {
+                    gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+                    gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+                    gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
+                } catch(e) { console.warn("Error ramping gain:", e); }
+            }
+
+            // Capture current instances for the timeout closure
+            const oscLToStop = oscillatorL;
+            const oscRToStop = oscillatorR;
+            
+            // Nullify globals immediately so startSound knows we are stopped/stopping
+            oscillatorL = null;
+            oscillatorR = null;
+
+            setTimeout(() => {
+                try {
+                    if(oscLToStop) { oscLToStop.stop(); oscLToStop.disconnect(); }
+                } catch(e) { /* ignore already stopped errors */ }
+                
+                try {
+                    if(oscRToStop) { oscRToStop.stop(); oscRToStop.disconnect(); }
+                } catch(e) { /* ignore already stopped errors */ }
+            }, 100);
+
+            isPlaying = false;
+            playBtn.textContent = "PLAY FREQUENCY";
+            playBtn.classList.remove('playing');
+        }
+
+        // --- EVENT LISTENERS ---
+
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) stopSound();
+            else startSound();
+        });
+
+        volumeSlider.addEventListener('input', (e) => {
+            if (gainNode) {
+                gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(parseFloat(e.target.value), audioCtx.currentTime);
+            }
+        });
+
+        freqSelect.addEventListener('change', (e) => {
+            const option = e.target.options[e.target.selectedIndex];
+            infoBox.style.display = 'block';
+            infoTitle.textContent = option.text;
+            infoDesc.textContent = option.getAttribute('data-desc');
+            
+            // If changing frequency while playing, restart
+            if (isPlaying) {
+                // We use a small timeout to let the fade out of stopSound initiate
+                stopSound();
+                setTimeout(startSound, 150);
+            }
+
+            // Show/Hide Binaural Slider
+            if (e.target.value.startsWith('binaural')) {
+                binauralPanel.classList.add('binaural-active');
+            } else {
+                binauralPanel.classList.remove('binaural-active');
+            }
+        });
+
+        carrierSlider.addEventListener('input', (e) => {
+            carrierDisplay.textContent = e.target.value + "Hz";
+            if (isPlaying && isBinaural && oscillatorL && oscillatorR) {
+                // Update live
+                const beat = oscillatorR.frequency.value - oscillatorL.frequency.value;
+                const newCarrier = parseInt(e.target.value);
+                oscillatorL.frequency.value = newCarrier;
+                oscillatorR.frequency.value = newCarrier + beat;
+            }
+        });
+
+        // --- VISUALIZER LOOP ---
+        function drawVisualizer() {
+            requestAnimationFrame(drawVisualizer);
+            if (!isPlaying) {
+                canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+
+            analyser.getByteTimeDomainData(dataArray);
+
+            canvasCtx.fillStyle = '#0f111a';
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+            canvasCtx.lineWidth = 2;
+            canvasCtx.strokeStyle = '#00d4ff';
+
+            canvasCtx.beginPath();
+            const sliceWidth = canvas.width * 1.0 / bufferLength;
+            let x = 0;
+
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = v * canvas.height / 2;
+
+                if (i === 0) canvasCtx.moveTo(x, y);
+                else canvasCtx.lineTo(x, y);
+
+                x += sliceWidth;
+            }
+
+            canvasCtx.lineTo(canvas.width, canvas.height / 2);
+            canvasCtx.stroke();
+        }
+
+    </script>
+</body>
+</html>
