@@ -67,7 +67,7 @@
             margin-top: 15px;
         }
 
-        select, button, input[type="range"] {
+        select, button, input[type="range"], input[type="number"] {
             width: 100%;
             padding: 12px;
             margin-bottom: 10px;
@@ -80,7 +80,7 @@
         }
 
         select { appearance: none; cursor: pointer; border: 1px solid #363c52; }
-        select:focus { outline: none; border-color: var(--accent-color); }
+        select:focus, input[type="number"]:focus { outline: none; border-color: var(--accent-color); }
 
         button {
             cursor: pointer;
@@ -103,6 +103,12 @@
             background: var(--danger-color);
             color: #fff;
         }
+
+        /* FLEX ROW HELPERS */
+        .flex-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+        .flex-row select, .flex-row input, .flex-row button { margin-bottom: 0; }
+        #favBtn { width: auto; background: var(--paypal-gold); color: #000; flex-shrink: 0; padding: 12px 20px; }
+        .timer-display { font-size: 1.5em; font-weight: bold; color: var(--danger-color); text-align: center; margin-top: 10px; display: none; }
 
         /* --- INFO BOX --- */
         .info-box {
@@ -220,6 +226,8 @@
         <select id="freqSelect">
             <option value="" disabled selected>-- Choose a Frequency --</option>
             
+            <optgroup label="⭐ Favorites" id="favoritesGroup"></optgroup>
+
             <optgroup label="1. Solfeggio (Spiritual & Emotional)">
                 <option value="174" data-desc="Relieves pain and stress. Foundation of the scale.">174 Hz - Pain Relief</option>
                 <option value="285" data-desc="Heals tissues and organs. Rejuvenates the body.">285 Hz - Tissue Repair</option>
@@ -265,11 +273,27 @@
             </optgroup>
         </select>
 
+        <!-- CUSTOM FREQUENCY -->
+        <div class="category-label">Or Enter Custom Frequency (Hz)</div>
+        <div class="flex-row">
+            <input type="number" id="customFreq" placeholder="e.g. 432.5" step="0.1" min="1" max="20000">
+            <button id="favBtn" title="Save to Favorites">⭐ Save</button>
+        </div>
+
         <!-- INFO DISPLAY -->
         <div class="info-box" id="infoBox" style="display:none;">
             <span class="info-title" id="infoTitle">Select a frequency</span>
             <span class="info-desc" id="infoDesc">...</span>
         </div>
+
+        <!-- WAVEFORM -->
+        <div class="category-label">Waveform</div>
+        <select id="waveSelect">
+            <option value="sine" selected>Sine (Smooth, Natural)</option>
+            <option value="square">Square (Rich, Rife preferred)</option>
+            <option value="triangle">Triangle (Mellow)</option>
+            <option value="sawtooth">Sawtooth (Sharp, Buzzing)</option>
+        </select>
 
         <!-- BINAURAL SETTINGS (Hidden unless needed) -->
         <div id="binauralPanel" class="binaural-controls">
@@ -284,9 +308,27 @@
             </p>
         </div>
 
+        <!-- AMBIENT MIXER -->
+        <div class="category-label">Ambient Mixer</div>
+        <div class="slider-container">
+            <label>Rain</label>
+            <input type="range" id="rainSlider" min="0" max="1" step="0.01" value="0">
+        </div>
+
+        <!-- TIMER -->
+        <div class="category-label">Sleep Timer</div>
+        <select id="timerSelect">
+            <option value="0" selected>Off</option>
+            <option value="5">5 Minutes</option>
+            <option value="15">15 Minutes</option>
+            <option value="30">30 Minutes</option>
+            <option value="60">60 Minutes</option>
+        </select>
+        <div class="timer-display" id="timerDisplay">00:00</div>
+
         <!-- MAIN VOLUME -->
         <div class="slider-container" style="margin-top: 25px;">
-            <label>Volume</label>
+            <label>Master Vol</label>
             <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.3">
         </div>
 
@@ -307,7 +349,6 @@
         </a>
 
         <!-- 2. M-Pesa Button -->
-        <!-- Replace 0700000000 with your number. The 'tel' link will open the phone dialer. -->
         <a href="tel:0715676116" class="donate-btn mpesa-btn">
             <svg viewBox="0 0 24 24">
                 <path d="M17,19H7V5H17M17,1H7C4.79,1 3,2.79 3,5V19A4,4 0 0,0 7,23H17A4,4 0 0,0 21,19V5C21,2.79 19.21,1 17,1Z"/>
@@ -332,10 +373,6 @@
         
         <!-- 
              === PASTE YOUR GISCUS SCRIPT HERE === 
-             1. Go to https://giscus.app
-             2. Enter your Repo details
-             3. Copy the <script> tag generated
-             4. Paste it below this line
         -->
         <div style="text-align: center; color: #555; font-style: italic; font-size: 0.8em;">
             (Comment system inactive: waiting for Giscus script)
@@ -350,26 +387,44 @@
         let oscillatorL = null;
         let oscillatorR = null; // Two oscillators for Binaural capability
         let gainNode, analyser;
+        
+        // Rain Synth Nodes
+        let rainSource = null;
+        let rainGain = null;
+        
         let isPlaying = false;
         let isBinaural = false;
+        
+        // Timer Variables
+        let timerInterval = null;
+        let targetEndTime = 0;
         
         // --- UI ELEMENTS ---
         const playBtn = document.getElementById('playBtn');
         const freqSelect = document.getElementById('freqSelect');
+        const customFreq = document.getElementById('customFreq');
+        const favBtn = document.getElementById('favBtn');
+        const favoritesGroup = document.getElementById('favoritesGroup');
+        const waveSelect = document.getElementById('waveSelect');
+        
         const volumeSlider = document.getElementById('volumeSlider');
         const carrierSlider = document.getElementById('carrierSlider');
         const carrierDisplay = document.getElementById('carrierDisplay');
+        const rainSlider = document.getElementById('rainSlider');
+        
         const infoBox = document.getElementById('infoBox');
         const infoTitle = document.getElementById('infoTitle');
         const infoDesc = document.getElementById('infoDesc');
         const binauralPanel = document.getElementById('binauralPanel');
+        
+        const timerSelect = document.getElementById('timerSelect');
+        const timerDisplay = document.getElementById('timerDisplay');
 
         // --- CANVAS SETUP ---
         const canvas = document.getElementById('visualizer');
         const canvasCtx = canvas.getContext('2d');
         let dataArray, bufferLength;
 
-        // --- RESIZE CANVAS ---
         function resizeCanvas() {
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
@@ -377,8 +432,102 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // --- CORE FUNCTIONS ---
+        // --- FAVORITES LOGIC ---
+        let favorites = JSON.parse(localStorage.getItem('hzFavorites') || '[]');
 
+        function renderFavorites() {
+            favoritesGroup.innerHTML = '';
+            if (favorites.length === 0) {
+                favoritesGroup.innerHTML = '<option disabled>No favorites saved yet.</option>';
+                return;
+            }
+            favorites.forEach(fav => {
+                const opt = document.createElement('option');
+                opt.value = fav;
+                opt.textContent = `⭐ ${fav} Hz`;
+                favoritesGroup.appendChild(opt);
+            });
+        }
+        renderFavorites();
+
+        favBtn.addEventListener('click', () => {
+            let val = customFreq.value;
+            if (!val && freqSelect.value && !freqSelect.value.startsWith('binaural')) {
+                val = freqSelect.value;
+            }
+            if (!val || val.startsWith('binaural')) {
+                alert("Please enter a valid numeric frequency to save.");
+                return;
+            }
+            if (!favorites.includes(val)) {
+                favorites.push(val);
+                localStorage.setItem('hzFavorites', JSON.stringify(favorites));
+                renderFavorites();
+                alert(`Saved ${val} Hz to favorites!`);
+            }
+        });
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            const hash = window.location.hash.replace('#freq=', '');
+            if (hash) {
+                if (Array.from(freqSelect.options).some(opt => opt.value === hash)) {
+                    freqSelect.value = hash;
+                    triggerSelectChange();
+                } else if (!isNaN(parseFloat(hash))) {
+                    customFreq.value = hash;
+                    triggerCustomFreqChange();
+                }
+            }
+        };
+
+        // --- INPUT HANDLING ---
+        function triggerSelectChange() {
+            customFreq.value = ''; // clear custom if preset selected
+            const option = freqSelect.options[freqSelect.selectedIndex];
+            if(option && option.value) {
+                window.history.replaceState(null, null, "#freq=" + option.value);
+                infoBox.style.display = 'block';
+                infoTitle.textContent = option.text;
+                infoDesc.textContent = option.getAttribute('data-desc') || "Custom or Favorite Frequency";
+                
+                if (option.value.startsWith('binaural')) {
+                    binauralPanel.classList.add('binaural-active');
+                } else {
+                    binauralPanel.classList.remove('binaural-active');
+                }
+            }
+            
+            if (isPlaying) {
+                stopSound();
+                setTimeout(startSound, 150);
+            }
+        }
+
+        function triggerCustomFreqChange() {
+            freqSelect.value = ''; // clear preset if custom entered
+            binauralPanel.classList.remove('binaural-active');
+            infoBox.style.display = 'block';
+            infoTitle.textContent = `Custom: ${customFreq.value} Hz`;
+            infoDesc.textContent = "User-defined custom frequency.";
+            window.history.replaceState(null, null, "#freq=" + customFreq.value);
+            
+            if (isPlaying) {
+                stopSound();
+                setTimeout(startSound, 150);
+            }
+        }
+
+        freqSelect.addEventListener('change', triggerSelectChange);
+        customFreq.addEventListener('change', triggerCustomFreqChange);
+        waveSelect.addEventListener('change', () => {
+            if (isPlaying) {
+                if (oscillatorL) oscillatorL.type = waveSelect.value;
+                if (oscillatorR) oscillatorR.type = waveSelect.value;
+            }
+        });
+
+        // --- AUDIO ENGINE ---
         function initAudio() {
             if (!audioCtx) {
                 audioCtx = new AudioContext();
@@ -391,92 +540,143 @@
                 gainNode.gain.value = volumeSlider.value;
                 gainNode.connect(analyser);
                 analyser.connect(audioCtx.destination);
+
+                // Rain Setup
+                rainGain = audioCtx.createGain();
+                rainGain.gain.value = 0; // Starts silent
+                rainGain.connect(audioCtx.destination);
                 
                 drawVisualizer();
             }
+        }
+
+        function createPinkNoise() {
+            const bufferSize = 2 * audioCtx.sampleRate;
+            const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            
+            // Pink noise approximation
+            let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+            for (let i = 0; i < bufferSize; i++) {
+                let white = Math.random() * 2 - 1;
+                b0 = 0.99886 * b0 + white * 0.0555179;
+                b1 = 0.99332 * b1 + white * 0.0750759;
+                b2 = 0.96900 * b2 + white * 0.1538520;
+                b3 = 0.86650 * b3 + white * 0.3104856;
+                b4 = 0.55000 * b4 + white * 0.5329522;
+                b5 = -0.7616 * b5 - white * 0.0168980;
+                output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                output[i] *= 0.11; // gain compensation
+                b6 = white * 0.115926;
+            }
+            
+            const noiseNode = audioCtx.createBufferSource();
+            noiseNode.buffer = noiseBuffer;
+            noiseNode.loop = true;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 1000; // Muffle to sound like rain
+
+            noiseNode.connect(filter);
+            filter.connect(rainGain);
+            return noiseNode;
+        }
+
+        function startTimer(minutes) {
+            clearInterval(timerInterval);
+            if (minutes <= 0) {
+                timerDisplay.style.display = 'none';
+                return;
+            }
+            
+            targetEndTime = Date.now() + minutes * 60000;
+            timerDisplay.style.display = 'block';
+            
+            timerInterval = setInterval(() => {
+                let remaining = targetEndTime - Date.now();
+                if (remaining <= 0) {
+                    clearInterval(timerInterval);
+                    timerDisplay.textContent = "00:00";
+                    stopSound();
+                } else {
+                    let m = Math.floor(remaining / 60000).toString().padStart(2, '0');
+                    let s = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
+                    timerDisplay.textContent = `${m}:${s}`;
+                }
+            }, 1000);
         }
 
         function startSound() {
             if (!audioCtx) initAudio();
             if (audioCtx.state === 'suspended') audioCtx.resume();
 
-            const selection = freqSelect.value;
-            if (!selection) return alert("Please select a frequency first.");
+            let selection = customFreq.value || freqSelect.value;
+            if (!selection) return alert("Please select or enter a frequency first.");
 
-            // Reset Old Oscillators (Safe Cleanup)
             try {
                 if (oscillatorL) { oscillatorL.stop(); oscillatorL.disconnect(); }
-            } catch(e) { console.warn("Error cleaning up Left Oscillator:", e); }
-            
-            try {
                 if (oscillatorR) { oscillatorR.stop(); oscillatorR.disconnect(); }
-            } catch(e) { console.warn("Error cleaning up Right Oscillator:", e); }
+                if (rainSource) { rainSource.stop(); rainSource.disconnect(); }
+            } catch(e) {}
             
             oscillatorL = null;
             oscillatorR = null;
+            rainSource = null;
 
-            // Create New Oscillators
-            // NOTE: We only create oscillatorR if we need it (Binaural mode)
-            // This prevents "stop() called on unstarted node" errors.
             oscillatorL = audioCtx.createOscillator();
             
-            // Panning Setup (Left/Right)
             const pannerL = audioCtx.createStereoPanner();
             const pannerR = audioCtx.createStereoPanner();
-            pannerL.pan.value = -1; // Full Left
-            pannerR.pan.value = 1;  // Full Right
+            pannerL.pan.value = -1;
+            pannerR.pan.value = 1;
 
-            oscillatorL.type = 'sine';
+            oscillatorL.type = waveSelect.value;
 
             if (selection.startsWith('binaural')) {
-                // BINAURAL MODE
                 isBinaural = true;
                 binauralPanel.classList.add('binaural-active');
                 
-                // Create R oscillator ONLY here
                 oscillatorR = audioCtx.createOscillator();
-                oscillatorR.type = 'sine';
+                oscillatorR.type = waveSelect.value;
                 
                 const carrier = parseInt(carrierSlider.value);
                 let beat = 0;
 
-                // Determine beat frequency
-                if (selection === 'binaural_delta') beat = 2; // Delta 2hz
-                if (selection === 'binaural_theta') beat = 6; // Theta 6hz
-                if (selection === 'binaural_alpha') beat = 10; // Alpha 10hz
-                if (selection === 'binaural_gamma') beat = 40; // Gamma 40hz
+                if (selection === 'binaural_delta') beat = 2;
+                if (selection === 'binaural_theta') beat = 6;
+                if (selection === 'binaural_alpha') beat = 10;
+                if (selection === 'binaural_gamma') beat = 40;
 
-                // Set Frequencies (Carrier vs Carrier + Beat)
                 oscillatorL.frequency.value = carrier;
                 oscillatorR.frequency.value = carrier + beat;
 
-                // Connect Left
                 oscillatorL.connect(pannerL);
                 pannerL.connect(gainNode);
 
-                // Connect Right
                 oscillatorR.connect(pannerR);
                 pannerR.connect(gainNode);
                 
                 oscillatorR.start();
-
             } else {
-                // STANDARD MONO MODE
                 isBinaural = false;
                 binauralPanel.classList.remove('binaural-active');
                 
                 const freq = parseFloat(selection);
                 oscillatorL.frequency.value = freq;
                 
-                // Connect (Center pan by default essentially, but we use pannerL at 0)
                 pannerL.pan.value = 0;
                 oscillatorL.connect(pannerL);
                 pannerL.connect(gainNode);
             }
 
             oscillatorL.start();
+
+            // Start Rain Source
+            rainSource = createPinkNoise();
+            rainSource.start();
+            rainGain.gain.setValueAtTime(parseFloat(rainSlider.value), audioCtx.currentTime);
             
-            // Fade in to avoid "pop"
             gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
             gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
             gainNode.gain.linearRampToValueAtTime(parseFloat(volumeSlider.value), audioCtx.currentTime + 0.1);
@@ -484,37 +684,42 @@
             isPlaying = true;
             playBtn.textContent = "STOP";
             playBtn.classList.add('playing');
+            
+            // Start Timer if set
+            startTimer(parseInt(timerSelect.value));
         }
 
         function stopSound() {
             if (!isPlaying) return;
 
             if (gainNode) {
-                // Fade out
                 try {
                     gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
                     gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
                     gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
-                } catch(e) { console.warn("Error ramping gain:", e); }
+                    
+                    rainGain.gain.cancelScheduledValues(audioCtx.currentTime);
+                    rainGain.gain.setValueAtTime(rainGain.gain.value, audioCtx.currentTime);
+                    rainGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
+                } catch(e) {}
             }
 
-            // Capture current instances for the timeout closure
             const oscLToStop = oscillatorL;
             const oscRToStop = oscillatorR;
+            const rainToStop = rainSource;
             
-            // Nullify globals immediately so startSound knows we are stopped/stopping
             oscillatorL = null;
             oscillatorR = null;
+            rainSource = null;
 
             setTimeout(() => {
-                try {
-                    if(oscLToStop) { oscLToStop.stop(); oscLToStop.disconnect(); }
-                } catch(e) { /* ignore already stopped errors */ }
-                
-                try {
-                    if(oscRToStop) { oscRToStop.stop(); oscRToStop.disconnect(); }
-                } catch(e) { /* ignore already stopped errors */ }
+                try { if(oscLToStop) { oscLToStop.stop(); oscLToStop.disconnect(); } } catch(e) {}
+                try { if(oscRToStop) { oscRToStop.stop(); oscRToStop.disconnect(); } } catch(e) {}
+                try { if(rainToStop) { rainToStop.stop(); rainToStop.disconnect(); } } catch(e) {}
             }, 100);
+
+            clearInterval(timerInterval);
+            timerDisplay.style.display = 'none';
 
             isPlaying = false;
             playBtn.textContent = "PLAY FREQUENCY";
@@ -522,7 +727,6 @@
         }
 
         // --- EVENT LISTENERS ---
-
         playBtn.addEventListener('click', () => {
             if (isPlaying) stopSound();
             else startSound();
@@ -534,36 +738,27 @@
                 gainNode.gain.setValueAtTime(parseFloat(e.target.value), audioCtx.currentTime);
             }
         });
-
-        freqSelect.addEventListener('change', (e) => {
-            const option = e.target.options[e.target.selectedIndex];
-            infoBox.style.display = 'block';
-            infoTitle.textContent = option.text;
-            infoDesc.textContent = option.getAttribute('data-desc');
-            
-            // If changing frequency while playing, restart
-            if (isPlaying) {
-                // We use a small timeout to let the fade out of stopSound initiate
-                stopSound();
-                setTimeout(startSound, 150);
-            }
-
-            // Show/Hide Binaural Slider
-            if (e.target.value.startsWith('binaural')) {
-                binauralPanel.classList.add('binaural-active');
-            } else {
-                binauralPanel.classList.remove('binaural-active');
+        
+        rainSlider.addEventListener('input', (e) => {
+            if (rainGain && isPlaying) {
+                rainGain.gain.cancelScheduledValues(audioCtx.currentTime);
+                rainGain.gain.setValueAtTime(parseFloat(e.target.value), audioCtx.currentTime);
             }
         });
 
         carrierSlider.addEventListener('input', (e) => {
             carrierDisplay.textContent = e.target.value + "Hz";
             if (isPlaying && isBinaural && oscillatorL && oscillatorR) {
-                // Update live
                 const beat = oscillatorR.frequency.value - oscillatorL.frequency.value;
                 const newCarrier = parseInt(e.target.value);
                 oscillatorL.frequency.value = newCarrier;
                 oscillatorR.frequency.value = newCarrier + beat;
+            }
+        });
+        
+        timerSelect.addEventListener('change', () => {
+            if (isPlaying) {
+                startTimer(parseInt(timerSelect.value));
             }
         });
 
@@ -602,5 +797,30 @@
         }
 
     </script>
+
+<!-- Site Tracker -->
+<script>
+(function() {
+  var SITE_ID = '4c3adc71-c9d1-409e-8efa-b5260fc8cce3';
+  var SERVER_URL = 'https://mysites.up.railway.app';
+  var visitorId = localStorage.getItem('tracker_vid');
+  if (!visitorId) {
+    visitorId = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    localStorage.setItem('tracker_vid', visitorId);
+  }
+  fetch(SERVER_URL + '/api/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      site_id: SITE_ID,
+      visitor_id: visitorId,
+      page_path: window.location.pathname,
+      referrer: document.referrer || '',
+      screen_width: screen.width,
+      screen_height: screen.height
+    })
+  }).catch(function() {});
+})();
+</script>
 </body>
 </html>
